@@ -1,5 +1,5 @@
 
-name: Build RYU APK
+name: RYU Android APK Builder
 
 on:
   workflow_dispatch:
@@ -12,10 +12,11 @@ permissions:
 
 jobs:
   build:
+    name: Build RYU
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Setup Java 17
@@ -30,7 +31,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Extract RYU source
+      - name: Extract RYU
         run: |
           mkdir -p extracted
           unzip -o ryu.zip -d extracted
@@ -38,45 +39,47 @@ jobs:
           PROJECT_FILE=$(find extracted -type f -name pubspec.yaml -print -quit)
 
           if [ -z "$PROJECT_FILE" ]; then
-            echo "ERROR: pubspec.yaml tidak ditemukan!"
+            echo "ERROR: pubspec.yaml tidak ditemukan"
             exit 1
           fi
 
           echo "PROJECT_DIR=$(dirname "$PROJECT_FILE")" >> "$GITHUB_ENV"
 
-      - name: Diagnose Gradle configuration
+      - name: Check Environment
+        run: |
+          java -version
+          flutter --version
+          echo "Project: $PROJECT_DIR"
+
+      - name: Inspect Gradle Configuration
         run: |
           echo "=== Gradle properties ==="
           find "$PROJECT_DIR" -name gradle.properties -type f \
             -exec grep -n 'org.gradle.jvmargs' {} \; || true
 
-          echo "=== Java environment ==="
-          env | grep -E 'JAVA_OPTS|GRADLE_OPTS|JAVA_TOOL_OPTIONS' || true
+          echo "=== Gradle wrapper ==="
+          find "$PROJECT_DIR/android" -name gradle-wrapper.properties \
+            -type f -exec cat {} \; || true
 
-      - name: Fix Gradle JVM arguments
-        run: |
-          find "$PROJECT_DIR" -name gradle.properties -type f -exec sed -i \
-            's|^org.gradle.jvmargs=.*|org.gradle.jvmargs=-Xmx2G -XX:MaxMetaspaceSize=1G -Dfile.encoding=UTF-8|' {} +
-
-          unset JAVA_OPTS
-          unset GRADLE_OPTS
-          unset JAVA_TOOL_OPTIONS
-
-      - name: Install dependencies
+      - name: Install Dependencies
         run: |
           cd "$PROJECT_DIR"
           flutter clean
           flutter pub get
 
-      - name: Analyze project
+      - name: Analyze Flutter
         run: |
           cd "$PROJECT_DIR"
           flutter analyze --no-fatal-infos
 
-      - name: Build APK
+      - name: Build Release APK
+        env:
+          JAVA_OPTS: ""
+          GRADLE_OPTS: ""
+          JAVA_TOOL_OPTIONS: ""
         run: |
           cd "$PROJECT_DIR"
-          flutter build apk --release
+          flutter build apk --release --verbose
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -84,3 +87,4 @@ jobs:
           name: RYU-Android-APK
           path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/*.apk
           if-no-files-found: error
+          retention-days: 7
