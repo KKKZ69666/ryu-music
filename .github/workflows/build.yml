@@ -15,10 +15,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -30,23 +30,36 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Extract RYU source
+      - name: Extract source
         run: |
-          mkdir extracted
-          unzip -q ryu.zip -d extracted
+          mkdir -p extracted
+          unzip -o ryu.zip -d extracted
           PROJECT_FILE=$(find extracted -type f -name pubspec.yaml -print -quit)
+
           if [ -z "$PROJECT_FILE" ]; then
-            echo "ERROR: pubspec.yaml tidak ditemukan!"
+            echo "pubspec.yaml tidak ditemukan!"
             exit 1
           fi
+
           echo "PROJECT_DIR=$(dirname "$PROJECT_FILE")" >> "$GITHUB_ENV"
+
+      - name: Check Gradle configuration
+        run: |
+          echo "=== Gradle JVM arguments ==="
+          find "$PROJECT_DIR" -name gradle.properties -type f \
+            -exec grep -n 'org.gradle.jvmargs' {} \; || true
+
+      - name: Clean Gradle configuration
+        run: |
+          find "$PROJECT_DIR" -name gradle.properties -type f \
+            -exec sed -i 's/"-Xmx/-Xmx/g; s/64m"/64m/g' {} +
 
       - name: Install dependencies
         run: |
           cd "$PROJECT_DIR"
           flutter pub get
 
-      - name: Analyze project
+      - name: Analyze
         run: |
           cd "$PROJECT_DIR"
           flutter analyze --no-fatal-infos
