@@ -43,16 +43,16 @@ jobs:
 
           echo "PROJECT_DIR=$(dirname "$PROJECT_FILE")" >> "$GITHUB_ENV"
 
-      - name: Check Gradle configuration
+
+      - name: Fix Gradle JVM configuration
         run: |
-          echo "=== Gradle JVM arguments ==="
+          find "$PROJECT_DIR" -name gradle.properties -type f -exec sed -i \
+            's|^org.gradle.jvmargs=.*|org.gradle.jvmargs=-Xmx2G -XX:MaxMetaspaceSize=1G -Dfile.encoding=UTF-8|' {} +
+
+          echo "=== JVM configuration after fix ==="
           find "$PROJECT_DIR" -name gradle.properties -type f \
             -exec grep -n 'org.gradle.jvmargs' {} \; || true
 
-      - name: Clean Gradle configuration
-        run: |
-          find "$PROJECT_DIR" -name gradle.properties -type f \
-            -exec sed -i 's/"-Xmx/-Xmx/g; s/64m"/64m/g' {} +
 
       - name: Install dependencies
         run: |
