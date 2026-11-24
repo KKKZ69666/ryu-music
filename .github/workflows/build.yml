@@ -80,12 +80,29 @@ jobs:
             fi
           done
 
-      - name: Prepare Gradle
+      - name: Repair Gradle Wrapper
         run: |
+          set -e
+
           cd "$PROJECT_DIR"
+
+          mkdir -p /tmp/ryu-gradle-wrapper
+
+          flutter create /tmp/ryu-gradle-wrapper \
+            --platforms=android
+
+          mkdir -p android/gradle/wrapper
+
+          cp /tmp/ryu-gradle-wrapper/android/gradle/wrapper/gradle-wrapper.jar \
+             android/gradle/wrapper/gradle-wrapper.jar
+
+          test -s android/gradle/wrapper/gradle-wrapper.jar
+
           chmod +x android/gradlew
+
           cd android
           ./gradlew --version
+
 
       - name: Clean and Install Dependencies
         run: |
