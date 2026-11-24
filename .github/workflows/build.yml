@@ -3,7 +3,6 @@ name: Build RYU APK
 on:
   push:
     branches:
-      - main
       - ryu-online-test
   workflow_dispatch:
 
@@ -30,7 +29,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.50.1"
+          flutter-version: "3.29.3"
           channel: stable
           cache: true
 
@@ -48,6 +47,7 @@ jobs:
           fi
 
           unzip -t "$ARCHIVE"
+          echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
 
       - name: Select Flutter Project
         run: |
@@ -62,21 +62,66 @@ jobs:
           test -n "$PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
+      - name: Restore Gradle Wrapper
+        run: |
+          cd "$PROJECT_DIR"
+
+          if [ ! -s android/gradlew ] || [ ! -s android/gradle/wrapper/gradle-wrapper.jar ]; then
+            flutter create \
+              --platforms=android \
+              --project-name=ryu_wrapper_temp \
+              /tmp/ryu_wrapper_temp
+
+            mkdir -p android/gradle/wrapper
+
+            cp /tmp/ryu_wrapper_temp/android/gradlew android/gradlew
+            cp /tmp/ryu_wrapper_temp/android/gradle/wrapper/gradle-wrapper.jar \
+              android/gradle/wrapper/gradle-wrapper.jar
+
+            chmod +x android/gradlew
+          fi
+
       - name: Configure Android Gradle
         run: |
           cd "$PROJECT_DIR"
 
-          sed -i 's/version "9.1.1"/version "8.5.2"/' \
-            android/settings.gradle.kts
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
 
-          sed -i 's#^distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.7-all.zip#' \
-            android/gradle/wrapper/gradle-wrapper.properties
+          settings = Path("android/settings.gradle.kts")
+          content = settings.read_text()
 
-          echo "Android Gradle Plugin:"
-          grep 'com.android.application' android/settings.gradle.kts
+          content, count = re.subn(
+              r'(id\("com\.android\.application"\)\s+version\s+")[^"]+(")',
+              r'\g<1>8.5.2\g<2>',
+              content,
+              count=1
+          )
 
-          echo "Gradle:"
-          grep distributionUrl android/gradle/wrapper/gradle-wrapper.properties
+          if count != 1:
+              raise SystemExit("Versi Android Gradle Plugin tidak ditemukan.")
+
+          settings.write_text(content)
+
+          wrapper = Path("android/gradle/wrapper/gradle-wrapper.properties")
+          content = wrapper.read_text()
+
+          content, count = re.subn(
+              r'^distributionUrl=.*$',
+              r'distributionUrl=https\\://services.gradle.org/distributions/gradle-8.7-all.zip',
+              content,
+              count=1,
+              flags=re.MULTILINE
+          )
+
+          if count != 1:
+              raise SystemExit("Gradle wrapper distributionUrl tidak ditemukan.")
+
+          wrapper.write_text(content)
+
+          print("AGP 8.5.2 dan Gradle 8.7 siap.")
+          PY
 
       - name: Set Online Navigation Label
         run: |
@@ -92,31 +137,13 @@ jobs:
           new = "_Tab('Online', Icons.language_rounded, Icons.language_rounded),"
 
           if new in s:
-              print("Online sudah tersedia.")
+              print("Menu Online sudah tersedia.")
           elif old in s:
               p.write_text(s.replace(old, new, 1))
-              print("Menu diubah menjadi Online.")
+              print("Menu berhasil diubah menjadi Online.")
           else:
               raise SystemExit("Baris menu Search tidak ditemukan.")
           PY
-
-      - name: Restore Gradle Wrapper
-        run: |
-          cd "$PROJECT_DIR"
-
-          if [ ! -s android/gradlew ] || [ ! -s android/gradle/wrapper/gradle-wrapper.jar ]; then
-            flutter create \
-              --platforms=android \
-              --project-name=ryu_wrapper_temp \
-              /tmp/ryu_wrapper_temp
-
-            mkdir -p android/gradle/wrapper
-            cp /tmp/ryu_wrapper_temp/android/gradlew android/gradlew
-            cp /tmp/ryu_wrapper_temp/android/gradle/wrapper/gradle-wrapper.jar \
-              android/gradle/wrapper/gradle-wrapper.jar
-
-            chmod +x android/gradlew
-          fi
 
       - name: Validate Project Files
         run: |
@@ -126,6 +153,7 @@ jobs:
           test -s lib/main.dart
           test -s android/settings.gradle.kts
           test -s android/app/build.gradle.kts
+          test -s android/gradle/wrapper/gradle-wrapper.jar
 
       - name: Clean and Install Dependencies
         run: |
@@ -146,12 +174,11 @@ jobs:
       - name: Build Release APK
         run: |
           cd "$PROJECT_DIR"
-          flutter build apk --release \
-            --android-skip-build-dependency-validation
+          flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: RYU-ONLINE-NEW-BUILD
+          name: RYU-ONLINE-BUILD-FLUTTER-329
           path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
