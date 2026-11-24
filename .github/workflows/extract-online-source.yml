@@ -1,0 +1,44 @@
+name: Extract RYU Online Source
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ryu-online-test
+          fetch-depth: 0
+
+      - name: Extract Flutter source
+        run: |
+          python3 - <<'PY'
+          import zipfile
+          from pathlib import PurePosixPath
+
+          archive = "RYU-ONLINE-SEARCH-INITIAL.zip"
+
+          with zipfile.ZipFile(archive) as z:
+              for info in z.infolist():
+                  path = PurePosixPath(info.filename)
+                  if path.is_absolute() or ".." in path.parts:
+                      raise SystemExit(f"Unsafe path: {info.filename}")
+              z.extractall(".")
+
+          PY
+
+      - name: Commit extracted source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "Extract RYU online Flutter source"
+            git push origin HEAD:ryu-online-test
+          fi
