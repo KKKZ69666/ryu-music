@@ -1,3 +1,4 @@
+
 name: RYU Android APK Build
 
 on:
@@ -31,47 +32,48 @@ jobs:
           flutter-version: '3.50.1'
           cache: true
 
-      - name: Check Project
+      - name: Extract RYU ZIP
         run: |
-          echo "Checking RYU project..."
-          test -f pubspec.yaml
-          test -f android/settings.gradle.kts
-          test -f lib/main.dart
-          echo "Project structure OK"
+          echo "Extracting RYU..."
+          unzip -o ryu.zip -d extracted
+          echo "Searching Flutter project..."
+          PROJECT_DIR=$(find extracted -name pubspec.yaml -printf '%h\n' | head -n 1)
 
-      - name: Prepare Gradle
-        run: |
-          chmod +x android/gradlew
-          echo "Gradle permissions ready"
-
-      - name: Install Dependencies
-        run: flutter pub get
-
-      - name: Analyze Code
-        run: flutter analyze --no-fatal-infos
-
-      - name: Run Tests
-        run: flutter test
-
-      - name: Build Release APK
-        run: flutter build apk --release
-
-      - name: Verify APK
-        run: |
-          APK="build/app/outputs/flutter-apk/app-release.apk"
-          if [ ! -f "$APK" ]; then
-            echo "APK not found!"
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: pubspec.yaml not found in ZIP"
             exit 1
           fi
-          mkdir -p output
-          cp "$APK" output/RYU-release.apk
-          ls -lh output/RYU-release.apk
 
-      - name: Upload APK Artifact
+          echo "Project found: $PROJECT_DIR"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Check Project
+        run: |
+          test -f "$PROJECT_DIR/pubspec.yaml"
+          test -f "$PROJECT_DIR/android/settings.gradle.kts"
+          test -f "$PROJECT_DIR/lib/main.dart"
+          echo "RYU project OK"
+
+      - name: Prepare Gradle
+        run: chmod +x "$PROJECT_DIR/android/gradlew"
+
+      - name: Install Dependencies
+        working-directory: .
+        run: cd "$PROJECT_DIR" && flutter pub get
+
+      - name: Analyze Code
+        run: cd "$PROJECT_DIR" && flutter analyze --no-fatal-infos
+
+      - name: Run Tests
+        run: cd "$PROJECT_DIR" && flutter test
+
+      - name: Build Release APK
+        run: cd "$PROJECT_DIR" && flutter build apk --release
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: RYU-Android-APK
-          path: output/RYU-release.apk
+          path: extracted/**/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14
-
