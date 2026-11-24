@@ -3,7 +3,10 @@ name: Build RYU APK
 on:
   push:
     branches:
-      - main
+      - ryu-final-v2
+    paths:
+      - 'RYU-FINAL.zip'
+      - '.github/workflows/build.yml'
   workflow_dispatch:
 
 permissions:
@@ -27,28 +30,19 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.50.1"
+          flutter-version: "3.29.3"
           channel: stable
           cache: true
 
-      - name: Select and Validate Archive
+      - name: Validate Archive
         run: |
-          if [ -f ryu-fixed.zip ]; then
-            ARCHIVE="ryu-fixed.zip"
-          elif [ -f ryu.zip ]; then
-            ARCHIVE="ryu.zip"
-          else
-            echo "File ZIP RYU tidak ditemukan!"
-            exit 1
-          fi
-
-          echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
-          unzip -t "$ARCHIVE"
+          test -s RYU-FINAL.zip
+          unzip -t RYU-FINAL.zip
 
       - name: Extract Flutter Project
         run: |
           mkdir -p extracted
-          unzip -q "$ARCHIVE" -d extracted
+          unzip -q RYU-FINAL.zip -d extracted
 
           PROJECT_DIR=$(find extracted -name pubspec.yaml -printf '%h\n' | head -n 1)
 
@@ -58,63 +52,17 @@ jobs:
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Project: $PROJECT_DIR"
 
-      - name: Restore Gradle Wrapper
+      - name: Validate Gradle Wrapper
         run: |
           cd "$PROJECT_DIR"
-
-          if [ ! -s android/gradlew ] || [ ! -s android/gradle/wrapper/gradle-wrapper.jar ]; then
-            echo "Memulihkan Gradle Wrapper..."
-
-            flutter create \
-              --platforms=android \
-              --project-name=ryu_wrapper_temp \
-              /tmp/ryu_wrapper_temp
-
-            mkdir -p android/gradle/wrapper
-
-            cp /tmp/ryu_wrapper_temp/android/gradlew android/gradlew
-            cp /tmp/ryu_wrapper_temp/android/gradle/wrapper/gradle-wrapper.jar \
-              android/gradle/wrapper/gradle-wrapper.jar
-
-            chmod +x android/gradlew
-          fi
-
           test -s android/gradlew
           test -s android/gradle/wrapper/gradle-wrapper.jar
+          chmod +x android/gradlew
 
-      - name: Upgrade Gradle Version
+      - name: Install Dependencies
         run: |
           cd "$PROJECT_DIR"
-
-          sed -i 's#^distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-9.3.1-all.zip#' \
-            android/gradle/wrapper/gradle-wrapper.properties
-
-          cat android/gradle/wrapper/gradle-wrapper.properties
-
-      - name: Validate Project Files
-        run: |
-          cd "$PROJECT_DIR"
-
-          for file in \
-            pubspec.yaml \
-            lib/main.dart \
-            android/gradlew \
-            android/gradle/wrapper/gradle-wrapper.jar \
-            android/gradle/wrapper/gradle-wrapper.properties
-          do
-            if [ ! -s "$file" ]; then
-              echo "File tidak ditemukan: $file"
-              exit 1
-            fi
-            echo "[OK] $file"
-          done
-
-      - name: Clean and Install Dependencies
-        run: |
-          cd "$PROJECT_DIR"
-          flutter clean
           flutter pub get
 
       - name: Analyze Code
