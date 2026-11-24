@@ -2,6 +2,9 @@ name: Extract RYU Online Source
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - ryu-online-test
 
 permissions:
   contents: write
