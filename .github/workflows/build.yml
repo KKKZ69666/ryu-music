@@ -51,16 +51,34 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Project ditemukan: $PROJECT_DIR"
 
-      - name: Verify Project Structure
+    
+      - name: Diagnose Project Structure
         run: |
-          set -e
-          test -f "$PROJECT_DIR/pubspec.yaml"
-          test -f "$PROJECT_DIR/lib/main.dart"
-          test -f "$PROJECT_DIR/android/gradlew"
-          test -f "$PROJECT_DIR/android/gradle/wrapper/gradle-wrapper.jar"
-          test -f "$PROJECT_DIR/android/gradle/wrapper/gradle-wrapper.properties"
+          echo "PROJECT_DIR=$PROJECT_DIR"
+          echo ""
+          echo "=== ROOT PROJECT ==="
+          ls -la "$PROJECT_DIR"
 
-          echo "Struktur proyek lengkap."
+          echo ""
+          echo "=== ANDROID FILES ==="
+          find "$PROJECT_DIR/android" -maxdepth 4 -type f | sort
+
+          echo ""
+          echo "=== REQUIRED FILE CHECK ==="
+
+          for file in \
+            pubspec.yaml \
+            lib/main.dart \
+            android/gradlew \
+            android/gradle/wrapper/gradle-wrapper.jar \
+            android/gradle/wrapper/gradle-wrapper.properties
+          do
+            if [ -f "$PROJECT_DIR/$file" ]; then
+              echo "[OK] $file"
+            else
+              echo "[MISSING] $file"
+            fi
+          done
 
       - name: Prepare Gradle
         run: |
