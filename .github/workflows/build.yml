@@ -1,3 +1,4 @@
+
 name: Build RYU APK
 
 on:
@@ -6,6 +7,7 @@ on:
       - main
       - ryu-online-test
   workflow_dispatch:
+
 permissions:
   contents: read
 
@@ -17,6 +19,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          ref: ryu-online-test
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -31,7 +35,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Select and Validate Archive
+      - name: Validate Existing Archive
         run: |
           if [ -f RYU-ONLINE-SEARCH-INITIAL.zip ]; then
             ARCHIVE="RYU-ONLINE-SEARCH-INITIAL.zip"
@@ -40,35 +44,89 @@ jobs:
           elif [ -f ryu.zip ]; then
             ARCHIVE="ryu.zip"
           else
-            echo "File ZIP RYU tidak ditemukan!"
+            echo "ZIP RYU tidak ditemukan!"
             exit 1
           fi
 
-          echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
+          echo "Archive tersedia: $ARCHIVE"
           unzip -t "$ARCHIVE"
 
-      - name: Extract Flutter Project
+      - name: Select Flutter Project
         run: |
-          mkdir -p extracted
-          unzip -q "$ARCHIVE" -d extracted
-
-          PROJECT_DIR=$(find extracted -name pubspec.yaml -printf '%h\n' | head -n 1)
+          if [ -f pubspec.yaml ] && [ -f lib/main.dart ]; then
+            PROJECT_DIR="."
+          else
+            mkdir -p extracted
+            unzip -q "$ARCHIVE" -d extracted
+            PROJECT_DIR=$(find extracted -name pubspec.yaml -printf '%h\n' | head -n 1)
+          fi
 
           if [ -z "$PROJECT_DIR" ]; then
-            echo "pubspec.yaml tidak ditemukan!"
+            echo "Project Flutter tidak ditemukan!"
             exit 1
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Project: $PROJECT_DIR"
 
+      - name: Fix Android Gradle Version
+        run: |
+          cd "$PROJECT_DIR"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path("android/settings.gradle.kts")
+          s = p.read_text()
+
+          s, count = re.subn(
+              r'(id\("com\.android\.application"\)\s+version\s+")[^"]+(")',
+              r'\g<1>9.1.1\g<2>',
+              s,
+              count=1
+          )
+
+          if count != 1:
+              raise SystemExit("Versi Android Gradle Plugin tidak ditemukan!")
+
+          p.write_text(s)
+          print("AGP diperbarui ke 9.1.1")
+          PY
+
+          sed -i 's#^distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-9.3.1-all.zip#' \
+            android/gradle/wrapper/gradle-wrapper.properties
+
+          cat android/settings.gradle.kts
+          cat android/gradle/wrapper/gradle-wrapper.properties
+
+      - name: Set Online Navigation Label
+        run: |
+          cd "$PROJECT_DIR"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("lib/features/shell/app_shell.dart")
+          s = p.read_text()
+
+          old = "_Tab('Search', Icons.search_rounded, Icons.search_rounded),"
+          new = "_Tab('Online', Icons.language_rounded, Icons.language_rounded),"
+
+          if new in s:
+              print("Menu Online sudah tersedia.")
+          elif old in s:
+              p.write_text(s.replace(old, new, 1))
+              print("Menu berhasil diubah menjadi Online.")
+          else:
+              raise SystemExit("Baris menu Search tidak ditemukan!")
+          PY
+
       - name: Restore Gradle Wrapper
         run: |
           cd "$PROJECT_DIR"
 
           if [ ! -s android/gradlew ] || [ ! -s android/gradle/wrapper/gradle-wrapper.jar ]; then
-            echo "Memulihkan Gradle Wrapper..."
-
             flutter create \
               --platforms=android \
               --project-name=ryu_wrapper_temp \
@@ -83,33 +141,15 @@ jobs:
             chmod +x android/gradlew
           fi
 
-          test -s android/gradlew
-          test -s android/gradle/wrapper/gradle-wrapper.jar
-
-      - name: Upgrade Gradle Version
-        run: |
-          cd "$PROJECT_DIR"
-
-          sed -i 's#^distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-9.3.1-all.zip#' \
-            android/gradle/wrapper/gradle-wrapper.properties
-
-          cat android/gradle/wrapper/gradle-wrapper.properties
-
       - name: Validate Project Files
         run: |
           cd "$PROJECT_DIR"
 
-          for file in \
-            pubspec.yaml \
-            lib/main.dart \
-            android/gradlew \
-            android/gradle/wrapper/gradle-wrapper.jar \
-            android/gradle/wrapper/gradle-wrapper.properties
-          do
-            if [ ! -s "$file" ]; then
+          for file in pubspec.yaml lib/main.dart android/settings.gradle.kts android/gradlew android/gradle/wrapper/gradle-wrapper.jar; do
+            test -s "$file" || {
               echo "File tidak ditemukan: $file"
               exit 1
-            fi
+            }
             echo "[OK] $file"
           done
 
@@ -137,6 +177,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: RYU-RELEASE
+          name: RYU-ONLINE-NEW-BUILD
           path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
