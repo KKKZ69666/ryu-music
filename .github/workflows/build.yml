@@ -1,9 +1,9 @@
-
 name: RYU Android APK Build
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -34,6 +34,7 @@ jobs:
       - name: Extract RYU Project
         run: |
           set -e
+
           test -f ryu.zip
           mkdir -p extracted
           unzip -o ryu.zip -d extracted
@@ -51,33 +52,26 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Project ditemukan: $PROJECT_DIR"
 
-    
-      - name: Diagnose Project Structure
+      - name: Validate Project Files
         run: |
-          echo "PROJECT_DIR=$PROJECT_DIR"
-          echo ""
-          echo "=== ROOT PROJECT ==="
+          set -e
+
+          echo "=== PROJECT STRUCTURE ==="
           ls -la "$PROJECT_DIR"
 
-          echo ""
-          echo "=== ANDROID FILES ==="
-          find "$PROJECT_DIR/android" -maxdepth 4 -type f | sort
-
-          echo ""
-          echo "=== REQUIRED FILE CHECK ==="
+          echo "=== CHECK FILES ==="
 
           for file in \
             pubspec.yaml \
             lib/main.dart \
             android/gradlew \
-            android/gradle/wrapper/gradle-wrapper.jar \
             android/gradle/wrapper/gradle-wrapper.properties
           do
-            if [ -f "$PROJECT_DIR/$file" ]; then
-              echo "[OK] $file"
-            else
-              echo "[MISSING] $file"
+            if [ ! -f "$PROJECT_DIR/$file" ]; then
+              echo "ERROR: File tidak ditemukan: $file"
+              exit 1
             fi
+            echo "[OK] $file"
           done
 
       - name: Repair Gradle Wrapper
@@ -86,15 +80,21 @@ jobs:
 
           cd "$PROJECT_DIR"
 
-          mkdir -p /tmp/ryu-gradle-wrapper
+          if [ ! -s android/gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "Gradle Wrapper JAR hilang. Membuat pengganti..."
 
-          flutter create /tmp/ryu-gradle-wrapper \
-            --platforms=android
+            rm -rf /tmp/ryu_gradle_wrapper
 
-          mkdir -p android/gradle/wrapper
+            flutter create \
+              --platforms=android \
+              --project-name=ryu_gradle_wrapper \
+              /tmp/ryu_gradle_wrapper
 
-          cp /tmp/ryu-gradle-wrapper/android/gradle/wrapper/gradle-wrapper.jar \
-             android/gradle/wrapper/gradle-wrapper.jar
+            mkdir -p android/gradle/wrapper
+
+            cp /tmp/ryu_gradle_wrapper/android/gradle/wrapper/gradle-wrapper.jar \
+              android/gradle/wrapper/gradle-wrapper.jar
+          fi
 
           test -s android/gradle/wrapper/gradle-wrapper.jar
 
@@ -103,10 +103,11 @@ jobs:
           cd android
           ./gradlew --version
 
-
       - name: Clean and Install Dependencies
         run: |
+          set -e
           cd "$PROJECT_DIR"
+
           flutter clean
           flutter pub get
 
@@ -122,15 +123,20 @@ jobs:
 
       - name: Build Release APK
         run: |
+          set -e
           cd "$PROJECT_DIR"
+
           flutter build apk --release
+
+          test -s build/app/outputs/flutter-apk/app-release.apk
 
       - name: Prepare APK Artifact
         run: |
           set -e
-          APK="$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk"
-          test -s "$APK"
-          cp "$APK" RYU-RELEASE.apk
+
+          cp "$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk" \
+            RYU-RELEASE.apk
+
           ls -lh RYU-RELEASE.apk
 
       - name: Upload APK
