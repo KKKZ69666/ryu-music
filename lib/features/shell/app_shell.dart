@@ -18,7 +18,7 @@ class _AppShellState extends State<AppShell> {
 
   static const _tabs = <_Tab>[
     _Tab('Home', Icons.home_outlined, Icons.home_rounded),
-    _Tab('Online', Icons.language_rounded, Icons.language_rounded),
+    _Tab('Search', Icons.search_rounded, Icons.search_rounded),
     _Tab('Library', Icons.library_music_outlined, Icons.library_music_rounded),
   ];
 
@@ -28,11 +28,7 @@ class _AppShellState extends State<AppShell> {
       extendBody: true,
       body: IndexedStack(
         index: _index,
-        children: const [
-          HomeScreen(),
-          SearchScreen(),
-          LibraryScreen(),
-        ],
+        children: const [HomeScreen(), SearchScreen(), LibraryScreen()],
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
@@ -74,7 +70,6 @@ class _AppShellState extends State<AppShell> {
 
 class _Tab {
   const _Tab(this.label, this.icon, this.activeIcon);
-
   final String label;
   final IconData icon;
   final IconData activeIcon;
@@ -128,4 +123,3 @@ class _NavItem extends StatelessWidget {
     );
   }
 }
- 
