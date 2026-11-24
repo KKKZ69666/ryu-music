@@ -33,7 +33,9 @@ jobs:
 
       - name: Select and Validate Archive
         run: |
-          if [ -f ryu-fixed.zip ]; then
+          if [ -f RYU-ONLINE-SEARCH-INITIAL.zip ]; then
+            ARCHIVE="RYU-ONLINE-SEARCH-INITIAL.zip"
+          elif [ -f ryu-fixed.zip ]; then
             ARCHIVE="ryu-fixed.zip"
           elif [ -f ryu.zip ]; then
             ARCHIVE="ryu.zip"
