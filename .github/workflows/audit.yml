@@ -1,1 +1,83 @@
+name: Audit Historical RYU Source
 
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout historical commit
+        uses: actions/checkout@v4
+        with:
+          ref: 63a00996e66c3ecec0c9cbd91c3c1838c51dd1de
+
+      - name: Inspect historical ZIP
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import zipfile
+          from pathlib import Path
+
+          archive = Path("ryu.zip")
+          report = []
+
+          report.append("# RYU Historical Source Audit")
+          report.append("")
+          report.append("Commit: `63a00996e66c3ecec0c9cbd91c3c1838c51dd1de`")
+          report.append("")
+
+          if not archive.exists():
+              report.append("## RESULT: ZIP NOT FOUND")
+              report.append("`ryu.zip` tidak ditemukan.")
+          else:
+              report.append(f"Archive size: {archive.stat().st_size} bytes")
+              report.append("")
+
+              try:
+                  with zipfile.ZipFile(archive) as z:
+                      files = [n for n in z.namelist() if not n.endswith("/")]
+                      bad = z.testzip()
+
+                      report.append("## ZIP Integrity")
+                      report.append("PASS" if bad is None else f"FAIL: {bad}")
+                      report.append("")
+                      report.append(f"Total files: {len(files)}")
+                      report.append(f"Dart files: {sum(n.endswith('.dart') for n in files)}")
+                      report.append("")
+
+                      checks = {
+                          "pubspec.yaml": any(n == "pubspec.yaml" or n.endswith("/pubspec.yaml") for n in files),
+                          "lib/main.dart": any(n == "lib/main.dart" or n.endswith("/lib/main.dart") for n in files),
+                          "lib/ directory": any(n.startswith("lib/") or "/lib/" in n for n in files),
+                          "android/ directory": any(n.startswith("android/") or "/android/" in n for n in files),
+                      }
+
+                      report.append("## Source Checks")
+                      for name, passed in checks.items():
+                          report.append(f"- {'PASS' if passed else 'MISSING'}: {name}")
+
+                      report.append("")
+                      report.append("## File Inventory")
+                      report.extend(f"- `{n}`" for n in files[:300])
+
+                      if len(files) > 300:
+                          report.append(f"- ... and {len(files) - 300} more files")
+
+              except Exception as e:
+                  report.append("## RESULT: ZIP ERROR")
+                  report.append(str(e))
+
+          Path("audit-report.md").write_text("\n".join(report), encoding="utf-8")
+          print("\n".join(report))
+          PY
+
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: RYU-HISTORICAL-SOURCE-AUDIT
+          path: audit-report.md
