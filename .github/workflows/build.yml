@@ -1,85 +1,80 @@
-name: Build Android APK
+
+name: RYU Android APK Build
 
 on:
   push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  build-apk:
-    name: Build Release APK (Flutter 3.50.1 / Java 17)
+  build:
+    name: Build RYU Release APK
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: ryu
+
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
+          channel: stable
           flutter-version: '3.50.1'
-          channel: 'stable'
           cache: true
 
-      - name: Verify toolchain versions
+      - name: Check Project Structure
         run: |
-          flutter --version
-          java -version
+          echo "Checking RYU project..."
+          test -f pubspec.yaml || {
+            echo "ERROR: pubspec.yaml not found!"
+            exit 1
+          }
+          test -f android/settings.gradle.kts
+          echo "Project structure OK"
 
-      - name: Install Flutter dependencies
+      - name: Prepare Gradle Wrapper
+        run: |
+          chmod +x android/gradlew
+          echo "Gradle wrapper permission configured"
+
+      - name: Install Flutter Dependencies
         run: flutter pub get
 
-      - name: Ensure Gradle Wrapper JAR and executable permissions
-        run: |
-          mkdir -p android/gradle/wrapper
-          if [ ! -f "android/gradle/wrapper/gradle-wrapper.jar" ]; then
-            TMP_GW=$(mktemp -d)
-            if command -v gradle >/dev/null 2>&1; then
-              (cd "$TMP_GW" && gradle wrapper --gradle-version 8.7 --distribution-type all)
-              cp "$TMP_GW/gradle/wrapper/gradle-wrapper.jar" android/gradle/wrapper/gradle-wrapper.jar
-            else
-              flutter create "$TMP_GW/app" --platforms=android >/dev/null
-              cp "$TMP_GW/app/android/gradle/wrapper/gradle-wrapper.jar" android/gradle/wrapper/gradle-wrapper.jar
-            fi
-            rm -rf "$TMP_GW"
-          fi
-          chmod +x android/gradlew
-          (cd android && ./gradlew --version)
-
-      - name: Run Flutter static analysis
+      - name: Analyze Flutter Code
         run: flutter analyze --no-fatal-infos
 
-      - name: Run Flutter unit and widget tests
+      - name: Run Flutter Tests
         run: flutter test
 
-      - name: Build Android Release APK
+      - name: Build Release APK
         run: flutter build apk --release
 
-      - name: Verify APK output
+      - name: Verify APK
         run: |
-          APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
-          if [ ! -s "$APK_PATH" ]; then
-            echo "ERROR: Release APK was not generated or is empty at $APK_PATH"
-            exit 1
-          fi
-          cp "$APK_PATH" RYU-release.apk
-          ls -lh RYU-release.apk
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          test -f "$APK"
+          mkdir -p output
+          cp "$APK" output/RYU-release.apk
+          ls -lh output/RYU-release.apk
 
-      - name: Upload RYU-release.apk artifact
+      - name: Upload RYU APK
         uses: actions/upload-artifact@v4
         with:
-          name: RYU-release-apk
-          path: RYU-release.apk
+          name: RYU-Android-APK
+          path: ryu/output/RYU-release.apk
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
