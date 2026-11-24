@@ -34,41 +34,75 @@ jobs:
 
       - name: Extract RYU ZIP
         run: |
-          echo "Extracting RYU..."
+          set -e
+          mkdir -p extracted
           unzip -o ryu.zip -d extracted
-          echo "Searching Flutter project..."
-          PROJECT_DIR=$(find extracted -name pubspec.yaml -printf '%h\n' | head -n 1)
+
+          PROJECT_DIR=$(find extracted -name pubspec.yaml \
+            -not -path '*/.dart_tool/*' \
+            -printf '%h\n' | head -n 1)
 
           if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: pubspec.yaml not found in ZIP"
+            echo "ERROR: pubspec.yaml not found"
             exit 1
           fi
 
-          echo "Project found: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Project found: $PROJECT_DIR"
 
-      - name: Check Project
+      - name: Inspect Project
         run: |
+          set -e
+          echo "Checking Flutter files..."
           test -f "$PROJECT_DIR/pubspec.yaml"
-          test -f "$PROJECT_DIR/android/settings.gradle.kts"
           test -f "$PROJECT_DIR/lib/main.dart"
-          echo "RYU project OK"
+          test -d "$PROJECT_DIR/android"
 
-      - name: Prepare Gradle
-        run: chmod +x "$PROJECT_DIR/android/gradlew"
+          echo "Android directory:"
+          find "$PROJECT_DIR/android" -maxdepth 3 -type f | sort
+
+      - name: Prepare Gradle Wrapper
+        run: |
+          set -e
+          cd "$PROJECT_DIR"
+
+          if [ ! -f android/gradlew ]; then
+            echo "Gradle wrapper script missing."
+            echo "Checking wrapper files..."
+
+            if [ ! -f android/gradle/wrapper/gradle-wrapper.jar ] || \
+               [ ! -f android/gradle/wrapper/gradle-wrapper.properties ]; then
+              echo "ERROR: Gradle wrapper files are incomplete."
+              exit 1
+            fi
+
+            echo "Cannot safely generate gradlew without a valid wrapper script."
+            exit 1
+          fi
+
+          chmod +x android/gradlew
+          test -f android/gradle/wrapper/gradle-wrapper.jar
+          test -f android/gradle/wrapper/gradle-wrapper.properties
 
       - name: Install Dependencies
-        working-directory: .
-        run: cd "$PROJECT_DIR" && flutter pub get
+        run: |
+          cd "$PROJECT_DIR"
+          flutter pub get
 
       - name: Analyze Code
-        run: cd "$PROJECT_DIR" && flutter analyze --no-fatal-infos
+        run: |
+          cd "$PROJECT_DIR"
+          flutter analyze --no-fatal-infos
 
       - name: Run Tests
-        run: cd "$PROJECT_DIR" && flutter test
+        run: |
+          cd "$PROJECT_DIR"
+          flutter test
 
       - name: Build Release APK
-        run: cd "$PROJECT_DIR" && flutter build apk --release
+        run: |
+          cd "$PROJECT_DIR"
+          flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
