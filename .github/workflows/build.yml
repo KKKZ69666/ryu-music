@@ -53,12 +53,47 @@ jobs:
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Validate Gradle Wrapper
+      - name: Restore Gradle Wrapper
         run: |
           cd "$PROJECT_DIR"
+
+          if [ ! -s android/gradlew ] || [ ! -s android/gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "Memulihkan Gradle Wrapper..."
+
+            flutter create \
+              --platforms=android \
+              --project-name=ryu_wrapper_temp \
+              /tmp/ryu_wrapper_temp
+
+            mkdir -p android/gradle/wrapper
+
+            cp /tmp/ryu_wrapper_temp/android/gradlew android/gradlew
+            cp /tmp/ryu_wrapper_temp/android/gradle/wrapper/gradle-wrapper.jar \
+              android/gradle/wrapper/gradle-wrapper.jar
+
+            chmod +x android/gradlew
+          fi
+
           test -s android/gradlew
           test -s android/gradle/wrapper/gradle-wrapper.jar
-          chmod +x android/gradlew
+
+      - name: Validate Project Files
+        run: |
+          cd "$PROJECT_DIR"
+
+          for file in \
+            pubspec.yaml \
+            lib/main.dart \
+            android/gradlew \
+            android/gradle/wrapper/gradle-wrapper.jar \
+            android/gradle/wrapper/gradle-wrapper.properties
+          do
+            test -s "$file" || {
+              echo "File tidak ditemukan: $file"
+              exit 1
+            }
+            echo "[OK] $file"
+          done
 
       - name: Install Dependencies
         run: |
