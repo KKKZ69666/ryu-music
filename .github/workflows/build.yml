@@ -1,86 +1,107 @@
-name: Build Android APK
+
+name: RYU Android APK Build
 
 on:
   push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  build-apk:
-    name: Build Release APK (Flutter Stable / Java 17)
+  build:
+    name: Build RYU APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: stable
+          flutter-version: '3.50.1'
           cache: true
 
-      - name: Verify toolchain versions
+      - name: Extract RYU Project
         run: |
-          flutter --version
-          java -version
+          set -e
+          test -f ryu.zip
+          mkdir -p extracted
+          unzip -o ryu.zip -d extracted
 
-      - name: Clean and fetch Flutter dependencies
+          PROJECT_DIR=$(find extracted \
+            -name pubspec.yaml \
+            -not -path '*/.dart_tool/*' \
+            -printf '%h\n' | head -n 1)
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: pubspec.yaml tidak ditemukan!"
+            exit 1
+          fi
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Project ditemukan: $PROJECT_DIR"
+
+      - name: Verify Project Structure
         run: |
+          set -e
+          test -f "$PROJECT_DIR/pubspec.yaml"
+          test -f "$PROJECT_DIR/lib/main.dart"
+          test -f "$PROJECT_DIR/android/gradlew"
+          test -f "$PROJECT_DIR/android/gradle/wrapper/gradle-wrapper.jar"
+          test -f "$PROJECT_DIR/android/gradle/wrapper/gradle-wrapper.properties"
+
+          echo "Struktur proyek lengkap."
+
+      - name: Prepare Gradle
+        run: |
+          cd "$PROJECT_DIR"
+          chmod +x android/gradlew
+          cd android
+          ./gradlew --version
+
+      - name: Clean and Install Dependencies
+        run: |
+          cd "$PROJECT_DIR"
           flutter clean
           flutter pub get
 
-      - name: Ensure Gradle Wrapper JAR and executable permissions
+      - name: Analyze Code
         run: |
-          mkdir -p android/gradle/wrapper
-          if [ ! -f "android/gradle/wrapper/gradle-wrapper.jar" ]; then
-            TMP_GW=$(mktemp -d)
-            if command -v gradle >/dev/null 2>&1; then
-              (cd "$TMP_GW" && gradle wrapper --gradle-version 8.7 --distribution-type all)
-              cp "$TMP_GW/gradle/wrapper/gradle-wrapper.jar" android/gradle/wrapper/gradle-wrapper.jar
-            else
-              flutter create "$TMP_GW/app" --platforms=android >/dev/null
-              cp "$TMP_GW/app/android/gradle/wrapper/gradle-wrapper.jar" android/gradle/wrapper/gradle-wrapper.jar
-            fi
-            rm -rf "$TMP_GW"
-          fi
-          chmod +x android/gradlew
-          (cd android && ./gradlew --version)
+          cd "$PROJECT_DIR"
+          flutter analyze --no-fatal-infos
 
-      - name: Run Flutter static analysis
-        run: flutter analyze --no-fatal-infos
-
-      - name: Run Flutter unit and widget tests
-        run: flutter test
-
-      - name: Build Android Release APK
-        run: flutter build apk --release
-
-      - name: Verify APK output
+      - name: Run Tests
         run: |
-          APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
-          if [ ! -s "$APK_PATH" ]; then
-            echo "ERROR: Release APK was not generated or is empty at $APK_PATH"
-            exit 1
-          fi
-          cp "$APK_PATH" RYU-RELEASE.apk
+          cd "$PROJECT_DIR"
+          flutter test
+
+      - name: Build Release APK
+        run: |
+          cd "$PROJECT_DIR"
+          flutter build apk --release
+
+      - name: Prepare APK Artifact
+        run: |
+          set -e
+          APK="$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk"
+          test -s "$APK"
+          cp "$APK" RYU-RELEASE.apk
           ls -lh RYU-RELEASE.apk
 
-      - name: Upload RYU-RELEASE.apk artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: RYU-RELEASE-apk
+          name: RYU-RELEASE
           path: RYU-RELEASE.apk
           if-no-files-found: error
           retention-days: 30
