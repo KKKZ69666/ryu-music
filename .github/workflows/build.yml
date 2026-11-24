@@ -84,6 +84,15 @@ jobs:
           test -s android/gradlew
           test -s android/gradle/wrapper/gradle-wrapper.jar
 
+      - name: Upgrade Gradle Version
+        run: |
+          cd "$PROJECT_DIR"
+
+          sed -i 's#^distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-9.3.1-all.zip#' \
+            android/gradle/wrapper/gradle-wrapper.properties
+
+          cat android/gradle/wrapper/gradle-wrapper.properties
+
       - name: Validate Project Files
         run: |
           cd "$PROJECT_DIR"
