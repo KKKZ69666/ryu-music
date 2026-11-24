@@ -42,12 +42,17 @@ jobs:
 
       - name: Ensure Gradle Wrapper JAR and executable permissions
         run: |
+          mkdir -p android/gradle/wrapper
           if [ ! -f "android/gradle/wrapper/gradle-wrapper.jar" ]; then
+            TMP_GW=$(mktemp -d)
             if command -v gradle >/dev/null 2>&1; then
-              (cd android && gradle wrapper --gradle-version 8.7 --distribution-type all)
+              (cd "$TMP_GW" && gradle wrapper --gradle-version 8.7 --distribution-type all)
+              cp "$TMP_GW/gradle/wrapper/gradle-wrapper.jar" android/gradle/wrapper/gradle-wrapper.jar
             else
-              flutter create . --platforms=android
+              flutter create "$TMP_GW/app" --platforms=android >/dev/null
+              cp "$TMP_GW/app/android/gradle/wrapper/gradle-wrapper.jar" android/gradle/wrapper/gradle-wrapper.jar
             fi
+            rm -rf "$TMP_GW"
           fi
           chmod +x android/gradlew
           (cd android && ./gradlew --version)
@@ -55,7 +60,7 @@ jobs:
       - name: Run Flutter static analysis
         run: flutter analyze --no-fatal-infos
 
-      - name: Run Flutter unit tests
+      - name: Run Flutter unit and widget tests
         run: flutter test
 
       - name: Build Android Release APK
