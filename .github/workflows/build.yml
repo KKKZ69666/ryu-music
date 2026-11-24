@@ -3,7 +3,8 @@ name: Build RYU APK
 on:
   push:
     branches:
-      - main
+  - main
+  - ryu-online-test
   workflow_dispatch:
 
 permissions:
