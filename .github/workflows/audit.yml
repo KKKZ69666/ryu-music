@@ -1,0 +1,145 @@
+name: Audit RYU Source
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Inspect RYU source archive
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate and extract source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ryu-fixed.zip
+          unzip -t ryu-fixed.zip
+          mkdir -p audit-source
+          unzip -q ryu-fixed.zip -d audit-source
+          echo "Extracted $(find audit-source -type f | wc -l) files."
+
+      - name: Generate source audit report
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path("audit-source")
+          files = sorted(p for p in root.rglob("*") if p.is_file())
+          dart_files = [p for p in files if p.suffix == ".dart"]
+          report = []
+
+          def add(text=""):
+              report.append(str(text))
+
+          add("# RYU Source Audit")
+          add("")
+          add(f"- Total files: {len(files)}")
+          add(f"- Dart files: {len(dart_files)}")
+          add("")
+          add("## File inventory")
+
+          for path in files:
+              add(f"- {path.relative_to(root)} ({path.stat().st_size} bytes)")
+
+          add("")
+          add("## Dependency manifest")
+
+          manifests = [p for p in files if p.name == "pubspec.yaml"]
+
+          if manifests:
+              for p in manifests:
+                  add(f"### {p.relative_to(root)}")
+                  add(p.read_text(errors="replace"))
+          else:
+              add("No pubspec.yaml found.")
+
+          add("")
+
+          patterns = {
+              "Audio / playback": r"just_audio|audio_service|AudioPlayer|play\(|pause\(|setUrl|setFilePath|youtube|media_kit",
+              "Streaming / network": r"http\.|https\.|Dio\(|http\.get|http\.post|Stream<|WebSocket|api\.",
+              "Lyrics": r"lyrics|\.lrc|Lrc|timestamp|synced",
+              "Search": r"search|query|debounce",
+              "Playlists / library": r"playlist|favorite|liked|library|queue",
+              "Liquid glass / theme": r"BackdropFilter|ImageFilter\.blur|Glass|glass|opacity|ColorScheme|ThemeData|palette",
+              "Persistence": r"SharedPreferences|Hive|Isar|sqflite|Drift|StorageService",
+          }
+
+          add("## Feature keyword scan")
+
+          for label, pattern in patterns.items():
+              add(f"### {label}")
+              hits = 0
+
+              for p in dart_files:
+                  lines = p.read_text(errors="replace").splitlines()
+
+                  for number, line in enumerate(lines, 1):
+                      if re.search(pattern, line, re.IGNORECASE):
+                          add(f"- {p.relative_to(root)}:{number}: {line.strip()[:240]}")
+                          hits += 1
+
+                          if hits >= 80:
+                              add("- (hit limit reached)")
+                              break
+
+                  if hits >= 80:
+                      break
+
+              if not hits:
+                  add("- No matches found.")
+
+              add("")
+
+          important_names = {
+              "main.dart",
+              "audio_controller.dart",
+              "lyrics_service.dart",
+              "ryu_colors.dart",
+              "ryu_theme.dart",
+              "search_screen.dart",
+              "now_playing_screen.dart",
+              "app_shell.dart",
+          }
+
+          add("## Important source files")
+
+          selected = [
+              p for p in files
+              if p.name in important_names or p.name == "pubspec.yaml"
+          ]
+
+          for p in selected:
+              add(f"### {p.relative_to(root)}")
+              lines = p.read_text(errors="replace").splitlines()
+              add("\n".join(lines[:300]))
+
+              if len(lines) > 300:
+                  add(f"... truncated; {len(lines) - 300} more lines omitted.")
+
+              add("")
+
+          Path("ryu-audit-report.md").write_text(
+              "\n".join(report),
+              encoding="utf-8"
+          )
+
+          print(f"Created report with {len(report)} lines.")
+          PY
+
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: RYU-SOURCE-AUDIT
+          path: ryu-audit-report.md
+          if-no-files-found: error
+          retention-days: 14
