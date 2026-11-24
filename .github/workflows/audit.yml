@@ -75,7 +75,20 @@ jobs:
           Path("audit-report.md").write_text("\n".join(report), encoding="utf-8")
           print("\n".join(report))
           PY
+      - name: Extract historical source
+        run: |
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile("ryu.zip") as z:
+              z.extractall(".")
+          PY
 
+      - name: Upload Flutter source
+        uses: actions/upload-artifact@v4
+        with:
+          name: RYU-FLUTTER-SOURCE
+          path: ryu/
+          if-no-files-found: error
       - name: Upload audit report
         uses: actions/upload-artifact@v4
         with:
