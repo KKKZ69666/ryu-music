@@ -1,4 +1,4 @@
-name: RYU Android APK Build
+name: Build RYU APK
 
 on:
   push:
@@ -13,7 +13,6 @@ jobs:
   build:
     name: Build RYU APK
     runs-on: ubuntu-latest
-    timeout-minutes: 45
 
     steps:
       - name: Checkout Repository
@@ -23,124 +22,110 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: "3.50.1"
           channel: stable
-          flutter-version: '3.50.1'
           cache: true
 
-      - name: Select and Validate Project Archive
-        id: archive
-        shell: bash
+      - name: Select and Validate Archive
         run: |
-          set -euo pipefail
-
-          if [[ -f ryu-fixed.zip ]]; then
+          if [ -f ryu-fixed.zip ]; then
             ARCHIVE="ryu-fixed.zip"
-          elif [[ -f ryu.zip ]]; then
+          elif [ -f ryu.zip ]; then
             ARCHIVE="ryu.zip"
           else
-            echo "::error::ZIP proyek tidak ditemukan."
-            ls -la
+            echo "File ZIP RYU tidak ditemukan!"
             exit 1
           fi
 
-          echo "Menggunakan: $ARCHIVE"
+          echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
           unzip -t "$ARCHIVE"
-          echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
 
       - name: Extract Flutter Project
-        shell: bash
         run: |
-          set -euo pipefail
           mkdir -p extracted
-          unzip -oq "${{ steps.archive.outputs.archive }}" -d extracted
+          unzip -q "$ARCHIVE" -d extracted
 
-          PROJECT_DIR="$(find extracted -type f -name pubspec.yaml -not -path '*/.dart_tool/*' -print -quit | xargs -r dirname)"
+          PROJECT_DIR=$(find extracted -name pubspec.yaml -printf '%h\n' | head -n 1)
 
-          if [[ -z "$PROJECT_DIR" || ! -f "$PROJECT_DIR/pubspec.yaml" ]]; then
-            echo "::error::pubspec.yaml tidak ditemukan."
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "pubspec.yaml tidak ditemukan!"
             exit 1
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Project: $PROJECT_DIR"
 
-      - name: Validate Project Files
-        shell: bash
+      - name: Restore Gradle Wrapper
         run: |
-          set -euo pipefail
           cd "$PROJECT_DIR"
 
-          for file in pubspec.yaml lib/main.dart android/gradlew android/gradle/wrapper/gradle-wrapper.properties; do
-            test -f "$file" || {
-              echo "::error::File tidak ditemukan: $file"
+          if [ ! -s android/gradlew ] || [ ! -s android/gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "Memulihkan Gradle Wrapper..."
+
+            flutter create \
+              --platforms=android \
+              --project-name=ryu_wrapper_temp \
+              /tmp/ryu_wrapper_temp
+
+            mkdir -p android/gradle/wrapper
+
+            cp /tmp/ryu_wrapper_temp/android/gradlew android/gradlew
+            cp /tmp/ryu_wrapper_temp/android/gradle/wrapper/gradle-wrapper.jar \
+              android/gradle/wrapper/gradle-wrapper.jar
+
+            chmod +x android/gradlew
+          fi
+
+          test -s android/gradlew
+          test -s android/gradle/wrapper/gradle-wrapper.jar
+
+      - name: Validate Project Files
+        run: |
+          cd "$PROJECT_DIR"
+
+          for file in \
+            pubspec.yaml \
+            lib/main.dart \
+            android/gradlew \
+            android/gradle/wrapper/gradle-wrapper.jar \
+            android/gradle/wrapper/gradle-wrapper.properties
+          do
+            if [ ! -s "$file" ]; then
+              echo "File tidak ditemukan: $file"
               exit 1
-            }
+            fi
             echo "[OK] $file"
           done
 
-      - name: Repair Gradle Wrapper if Needed
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$PROJECT_DIR"
-
-          if [[ ! -s android/gradle/wrapper/gradle-wrapper.jar ]]; then
-            flutter create --platforms=android --project-name=ryu_wrapper_temp /tmp/ryu_wrapper_temp
-            mkdir -p android/gradle/wrapper
-            cp /tmp/ryu_wrapper_temp/android/gradle/wrapper/gradle-wrapper.jar android/gradle/wrapper/gradle-wrapper.jar
-          fi
-
-          chmod +x android/gradlew
-          cd android
-          ./gradlew --version
-
       - name: Clean and Install Dependencies
-        shell: bash
         run: |
-          set -euo pipefail
           cd "$PROJECT_DIR"
           flutter clean
           flutter pub get
 
       - name: Analyze Code
-        shell: bash
         run: |
-          set -euo pipefail
           cd "$PROJECT_DIR"
           flutter analyze --no-fatal-infos
 
       - name: Run Tests
-        shell: bash
         run: |
-          set -euo pipefail
           cd "$PROJECT_DIR"
           flutter test
 
       - name: Build Release APK
-        shell: bash
         run: |
-          set -euo pipefail
           cd "$PROJECT_DIR"
           flutter build apk --release
-          test -s build/app/outputs/flutter-apk/app-release.apk
-
-      - name: Prepare APK Artifact
-        shell: bash
-        run: |
-          set -euo pipefail
-          cp "$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk" RYU-RELEASE.apk
-          ls -lh RYU-RELEASE.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: RYU-RELEASE
-          path: RYU-RELEASE.apk
+          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
-          retention-days: 30
-
