@@ -1,0 +1,6 @@
+{
+  "name": "RYU Music",
+  "description": "Premium Offline Music Player with Liquid Glass Design, Lyrics Studio, and Music Analysis",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
