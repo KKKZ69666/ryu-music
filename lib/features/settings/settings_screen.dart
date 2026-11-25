@@ -9,7 +9,7 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: RyuColors.background,
+      backgroundColor: RyuColors.void_,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -77,7 +77,7 @@ class SettingsScreen extends StatelessWidget {
                   subtitle: 'Seamless transition between tracks',
                   trailing: Switch(
                     value: true,
-                    activeColor: RyuColors.violetLight,
+                    activeColor: RyuColors.violet,
                     onChanged: (_) {},
                   ),
                 ),
@@ -109,7 +109,7 @@ class SettingsScreen extends StatelessWidget {
                   subtitle: 'Automatically sync lyrics online when offline cache missing',
                   trailing: Switch(
                     value: true,
-                    activeColor: RyuColors.violetLight,
+                    activeColor: RyuColors.violet,
                     onChanged: (_) {},
                   ),
                 ),
@@ -129,7 +129,7 @@ class SettingsScreen extends StatelessWidget {
                   title: 'Scan Local Storage',
                   subtitle: 'Refresh music library from device MediaStore',
                   onTap: () async {
-                    await RyuScope.of(context).library.scanMusic();
+                    await RyuScope.of(context).library.scanLibrary();
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Music library scanned successfully')),
@@ -192,7 +192,7 @@ class _SettingsSectionHeader extends StatelessWidget {
       child: Text(
         title.toUpperCase(),
         style: const TextStyle(
-          color: RyuColors.violetLight,
+          color: RyuColors.violet,
           fontSize: 12,
           fontWeight: FontWeight.w800,
           letterSpacing: 1.1,

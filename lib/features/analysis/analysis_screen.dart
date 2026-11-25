@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../core/models/history_entry.dart';
 import '../../core/models/song.dart';
 import '../../core/ryu_scope.dart';
 import '../../core/theme/ryu_colors.dart';
@@ -16,14 +15,12 @@ class AnalysisScreen extends StatelessWidget {
     final songs = scope.library.songs;
     final playCounts = scope.library.playCounts;
 
-    // Calculate total listening time (assume average song is 3.5 mins or use sum if duration available)
     int totalMinutes = 0;
     for (final entry in history) {
       final song = songs.where((s) => s.id == entry.songId).firstOrNull;
       totalMinutes += song != null ? (song.duration.inMinutes > 0 ? song.duration.inMinutes : 3) : 3;
     }
 
-    // Top songs
     final sortedSongIds = playCounts.keys.toList()
       ..sort((a, b) => (playCounts[b] ?? 0).compareTo(playCounts[a] ?? 0));
     
@@ -33,7 +30,6 @@ class AnalysisScreen extends StatelessWidget {
         .whereType<Song>()
         .toList();
 
-    // Top artists
     final artistCounts = <String, int>{};
     playCounts.forEach((songId, count) {
       final song = songs.where((s) => s.id == songId).firstOrNull;
@@ -46,7 +42,7 @@ class AnalysisScreen extends StatelessWidget {
     final topArtists = sortedArtists.take(5).toList();
 
     return Scaffold(
-      backgroundColor: RyuColors.background,
+      backgroundColor: RyuColors.void_,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -59,7 +55,6 @@ class AnalysisScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
         children: [
-          // Overview Card (Total Listening Time & Plays)
           GlassContainer(
             borderRadius: 24,
             padding: const EdgeInsets.all(20),
@@ -74,7 +69,7 @@ class AnalysisScreen extends StatelessWidget {
                         color: RyuColors.violet.withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: const Icon(Icons.insights_rounded, color: RyuColors.violetLight, size: 24),
+                      child: const Icon(Icons.insights_rounded, color: RyuColors.violet, size: 24),
                     ),
                     const SizedBox(width: 14),
                     const Column(
@@ -124,8 +119,6 @@ class AnalysisScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-
-          // Top Played Tracks
           const Text(
             'Most Played Tracks',
             style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
@@ -157,7 +150,7 @@ class AnalysisScreen extends StatelessWidget {
                     children: [
                       Text(
                         '#${idx + 1}',
-                        style: const TextStyle(color: RyuColors.violetLight, fontWeight: FontWeight.w800, fontSize: 15),
+                        style: const TextStyle(color: RyuColors.violet, fontWeight: FontWeight.w800, fontSize: 15),
                       ),
                       const SizedBox(width: 14),
                       ClipRRect(
@@ -165,7 +158,12 @@ class AnalysisScreen extends StatelessWidget {
                         child: SizedBox(
                           width: 44,
                           height: 44,
-                          child: ArtworkImage(song: song),
+                          child: ArtworkImage(
+                            songId: song.id,
+                            albumId: song.albumId,
+                            size: 44,
+                            borderRadius: 10,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -197,7 +195,7 @@ class AnalysisScreen extends StatelessWidget {
                         ),
                         child: Text(
                           '$plays plays',
-                          style: const TextStyle(color: RyuColors.violetLight, fontSize: 11, fontWeight: FontWeight.w600),
+                          style: const TextStyle(color: RyuColors.violet, fontSize: 11, fontWeight: FontWeight.w600),
                         ),
                       ),
                     ],
@@ -206,8 +204,6 @@ class AnalysisScreen extends StatelessWidget {
               );
             }),
           const SizedBox(height: 24),
-
-          // Top Artists
           const Text(
             'Top Artists',
             style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
@@ -286,7 +282,7 @@ class _StatMetricBox extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: RyuColors.violetLight, size: 20),
+          Icon(icon, color: RyuColors.violet, size: 20),
           const SizedBox(height: 10),
           Text(
             value,
