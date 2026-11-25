@@ -31,34 +31,45 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Select and Validate Archive
+      - name: Select and Validate Project Source
         run: |
-          if [ -f ryu-fixed.zip ]; then
-            ARCHIVE="ryu-fixed.zip"
-          elif [ -f ryu.zip ]; then
-            ARCHIVE="ryu.zip"
+          echo "=== RYU MUSIC BUILD DIAGNOSTICS ==="
+          echo "Branch: ${GITHUB_REF_NAME}"
+          echo "Commit SHA: ${GITHUB_SHA}"
+          echo "==================================="
+
+          PROJECT_DIR=""
+          SOURCE_TYPE=""
+
+          if [ -f pubspec.yaml ] && [ -f lib/main.dart ] && [ -d android ]; then
+            echo "[INFO] Root Flutter project detected at repository root."
+            PROJECT_DIR="."
+            SOURCE_TYPE="Root Repository"
+          elif [ -f ryu-fixed.zip ] || [ -f ryu.zip ]; then
+            ARCHIVE=$([ -f ryu-fixed.zip ] && echo "ryu-fixed.zip" || echo "ryu.zip")
+            echo "[INFO] Root Flutter project not found. Fallback to archive: $ARCHIVE"
+            mkdir -p extracted
+            unzip -q "$ARCHIVE" -d extracted
+            PROJECT_DIR=$(find extracted -name pubspec.yaml -printf '%h\n' | head -n 1)
+            SOURCE_TYPE="Archive ($ARCHIVE)"
           else
-            echo "File ZIP RYU tidak ditemukan!"
+            echo "[ERROR] Neither root Flutter project nor ZIP archive found!"
             exit 1
           fi
 
-          echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
-          unzip -t "$ARCHIVE"
-
-      - name: Extract Flutter Project
-        run: |
-          mkdir -p extracted
-          unzip -q "$ARCHIVE" -d extracted
-
-          PROJECT_DIR=$(find extracted -name pubspec.yaml -printf '%h\n' | head -n 1)
-
           if [ -z "$PROJECT_DIR" ]; then
-            echo "pubspec.yaml tidak ditemukan!"
+            echo "[ERROR] pubspec.yaml could not be determined!"
             exit 1
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Project: $PROJECT_DIR"
+          echo "SOURCE_TYPE=$SOURCE_TYPE" >> "$GITHUB_ENV"
+
+          echo "-----------------------------------"
+          echo "Selected Project Source: $SOURCE_TYPE"
+          echo "Project Directory: $PROJECT_DIR"
+          echo "APK Output Path: $PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk"
+          echo "-----------------------------------"
 
       - name: Restore Gradle Wrapper
         run: |
