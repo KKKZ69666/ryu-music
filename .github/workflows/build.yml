@@ -31,50 +31,18 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Select and Validate Project Source
+      - name: Log Build Information
         run: |
-          echo "=== RYU MUSIC BUILD DIAGNOSTICS ==="
+          echo "=== RYU MUSIC BUILD SUMMARY ==="
+          echo "Source Type: Root Repository"
+          echo "Project Directory: ."
           echo "Branch: ${GITHUB_REF_NAME}"
           echo "Commit SHA: ${GITHUB_SHA}"
-          echo "==================================="
-
-          PROJECT_DIR=""
-          SOURCE_TYPE=""
-
-          if [ -f pubspec.yaml ] && [ -f lib/main.dart ] && [ -d android ]; then
-            echo "[INFO] Root Flutter project detected at repository root."
-            PROJECT_DIR="."
-            SOURCE_TYPE="Root Repository"
-          elif [ -f ryu-fixed.zip ] || [ -f ryu.zip ]; then
-            ARCHIVE=$([ -f ryu-fixed.zip ] && echo "ryu-fixed.zip" || echo "ryu.zip")
-            echo "[INFO] Root Flutter project not found. Fallback to archive: $ARCHIVE"
-            mkdir -p extracted
-            unzip -q "$ARCHIVE" -d extracted
-            PROJECT_DIR=$(find extracted -name pubspec.yaml -printf '%h\n' | head -n 1)
-            SOURCE_TYPE="Archive ($ARCHIVE)"
-          else
-            echo "[ERROR] Neither root Flutter project nor ZIP archive found!"
-            exit 1
-          fi
-
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "[ERROR] pubspec.yaml could not be determined!"
-            exit 1
-          fi
-
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "SOURCE_TYPE=$SOURCE_TYPE" >> "$GITHUB_ENV"
-
-          echo "-----------------------------------"
-          echo "Selected Project Source: $SOURCE_TYPE"
-          echo "Project Directory: $PROJECT_DIR"
-          echo "APK Output Path: $PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk"
-          echo "-----------------------------------"
+          echo "APK Output Path: build/app/outputs/flutter-apk/app-release.apk"
+          echo "==============================="
 
       - name: Restore Gradle Wrapper
         run: |
-          cd "$PROJECT_DIR"
-
           if [ ! -s android/gradlew ] || [ ! -s android/gradle/wrapper/gradle-wrapper.jar ]; then
             echo "Memulihkan Gradle Wrapper..."
 
@@ -97,8 +65,6 @@ jobs:
 
       - name: Upgrade Gradle Version
         run: |
-          cd "$PROJECT_DIR"
-
           sed -i 's#^distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-9.3.1-all.zip#' \
             android/gradle/wrapper/gradle-wrapper.properties
 
@@ -106,8 +72,6 @@ jobs:
 
       - name: Validate Project Files
         run: |
-          cd "$PROJECT_DIR"
-
           for file in \
             pubspec.yaml \
             lib/main.dart \
@@ -124,28 +88,24 @@ jobs:
 
       - name: Clean and Install Dependencies
         run: |
-          cd "$PROJECT_DIR"
           flutter clean
           flutter pub get
 
       - name: Analyze Code
         run: |
-          cd "$PROJECT_DIR"
           flutter analyze --no-fatal-infos
 
       - name: Run Tests
         run: |
-          cd "$PROJECT_DIR"
           flutter test
 
       - name: Build Release APK
         run: |
-          cd "$PROJECT_DIR"
           flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: RYU-RELEASE
-          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
